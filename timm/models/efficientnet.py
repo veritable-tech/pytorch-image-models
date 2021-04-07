@@ -37,6 +37,7 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint_sequential
 
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD, IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
@@ -128,13 +129,13 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_em_ra2-66250f76.pth',
         input_size=(3, 240, 240), pool_size=(8, 8), crop_pct=0.882),
     'efficientnet_el': _cfg(
-        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el.pth', 
+        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el.pth',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
 
     'efficientnet_es_pruned': _cfg(
         url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_es_pruned75.pth'),
     'efficientnet_el_pruned': _cfg(
-        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el_pruned70.pth', 
+        url='https://github.com/DeGirum/pruned-models/releases/download/efficientnet_v1.0/efficientnet_el_pruned70.pth',
         input_size=(3, 300, 300), pool_size=(10, 10), crop_pct=0.904),
 
     'efficientnet_cc_b0_4e': _cfg(url=''),
@@ -432,11 +433,13 @@ class EfficientNet(nn.Module):
 
     def __init__(self, block_args, num_classes=1000, num_features=1280, in_chans=3, stem_size=32, fix_stem=False,
                  output_stride=32, pad_type='', round_chs_fn=round_channels, act_layer=None, norm_layer=None,
-                 se_layer=None, drop_rate=0., drop_path_rate=0., global_pool='avg'):
+                 se_layer=None, drop_rate=0., drop_path_rate=0., global_pool='avg', memory_efficient=False):
         super(EfficientNet, self).__init__()
         act_layer = act_layer or nn.ReLU
         norm_layer = norm_layer or nn.BatchNorm2d
         se_layer = se_layer or SqueezeExcite
+
+        self.memory_efficient = memory_efficient
         self.num_classes = num_classes
         self.num_features = num_features
         self.drop_rate = drop_rate
@@ -484,7 +487,10 @@ class EfficientNet(nn.Module):
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)
-        x = self.blocks(x)
+        if self.memory_efficient:
+            x = checkpoint_sequential(self.blocks, segments=len(self.blocks), input=x)
+        else:
+            x = self.blocks(x)
         x = self.conv_head(x)
         x = self.bn2(x)
         x = self.act2(x)
