@@ -487,7 +487,7 @@ class EfficientNet(nn.Module):
         x = self.conv_stem(x)
         x = self.bn1(x)
         x = self.act1(x)
-        if self.memory_efficient:
+        if self.memory_efficient and self.training:
             x = checkpoint_sequential(self.blocks, segments=len(self.blocks), input=x)
         else:
             x = self.blocks(x)
