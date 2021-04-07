@@ -34,6 +34,7 @@ from collections import OrderedDict  # pylint: disable=g-importing-member
 import torch
 import torch.nn as nn
 from functools import partial
+from torch.utils.checkpoint import checkpoint_sequential
 
 from timm.data import IMAGENET_INCEPTION_MEAN, IMAGENET_INCEPTION_STD
 from .helpers import build_model_with_cfg, named_apply, adapt_input_conv
@@ -344,8 +345,9 @@ class ResNetV2(nn.Module):
             num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
             width_factor=1, stem_chs=64, stem_type='', avg_down=False, preact=True,
             act_layer=nn.ReLU, conv_layer=StdConv2d, norm_layer=partial(GroupNormAct, num_groups=32),
-            drop_rate=0., drop_path_rate=0., zero_init_last=True):
+            drop_rate=0., drop_path_rate=0., zero_init_last=True, memory_efficient=False):
         super().__init__()
+        self.memory_efficient = memory_efficient
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         wf = width_factor
@@ -401,7 +403,10 @@ class ResNetV2(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.memory_efficient and self.training:
+            x = checkpoint_sequential(self.stages, segments=len(self.stages), input=x)
+        else:
+            x = self.stages(x)
         x = self.norm(x)
         return x
 
