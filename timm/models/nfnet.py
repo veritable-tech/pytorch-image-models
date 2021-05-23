@@ -24,6 +24,7 @@ from functools import partial
 
 import torch
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint_sequential
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
 from .helpers import build_model_with_cfg
@@ -476,8 +477,9 @@ class NormFreeNet(nn.Module):
             for what it is/does. Approx 8-10% throughput loss.
     """
     def __init__(self, cfg: NfCfg, num_classes=1000, in_chans=3, global_pool='avg', output_stride=32,
-                 drop_rate=0., drop_path_rate=0.):
+                 drop_rate=0., drop_path_rate=0., memory_efficient=False):
         super().__init__()
+        self.memory_efficient=memory_efficient
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         assert cfg.act_layer in _nonlin_gamma, f"Please add non-linearity constants for activation ({cfg.act_layer})."
@@ -574,7 +576,10 @@ class NormFreeNet(nn.Module):
 
     def forward_features(self, x):
         x = self.stem(x)
-        x = self.stages(x)
+        if self.memory_efficient and self.training:
+            x = checkpoint_sequential(self.stages, segments=len(self.stages), input=x)
+        else:
+            x = self.stages(x)
         x = self.final_conv(x)
         x = self.final_act(x)
         return x
