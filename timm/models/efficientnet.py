@@ -93,11 +93,6 @@ default_cfgs = {
         interpolation='bilinear'),
 
     # NOTE experimenting with alternate attention
-    'eca_efficientnet_b0': _cfg(
-        url=''),
-    'gc_efficientnet_b0': _cfg(
-        url=''),
-
     'efficientnet_b0': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_b0_ra-3dd342df.pth'),
     'efficientnet_b1': _cfg(
@@ -170,7 +165,7 @@ default_cfgs = {
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnetv2_t_agc-3620981a.pth',
         input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
     'gc_efficientnetv2_rw_t': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/gc_efficientnetv2_rw_t_agc-927a0bde.pth',
         input_size=(3, 224, 224), test_input_size=(3, 288, 288), pool_size=(7, 7), crop_pct=1.0),
     'efficientnetv2_rw_s': _cfg(
         url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-weights/efficientnet_v2s_ra2_288-a6477665.pth',
@@ -363,7 +358,7 @@ default_cfgs = {
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
     'tf_efficientnetv2_xl_in21ft1k': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21ft1k-06c35c48.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5),
         input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
 
@@ -380,7 +375,7 @@ default_cfgs = {
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
         input_size=(3, 384, 384), test_input_size=(3, 480, 480), pool_size=(12, 12), crop_pct=1.0),
     'tf_efficientnetv2_xl_in21k': _cfg(
-        url='',
+        url='https://github.com/rwightman/pytorch-image-models/releases/download/v0.1-effv2-weights/tf_efficientnetv2_xl_in21k-fd7e8abf.pth',
         mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5), num_classes=21843,
         input_size=(3, 384, 384), test_input_size=(3, 512, 512), pool_size=(12, 12), crop_pct=1.0),
 
@@ -611,7 +606,7 @@ def _gen_mnasnet_a1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
         block_args=decode_arch_def(arch_def),
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -647,7 +642,7 @@ def _gen_mnasnet_b1(variant, channel_multiplier=1.0, pretrained=False, **kwargs)
         block_args=decode_arch_def(arch_def),
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -676,7 +671,7 @@ def _gen_mnasnet_small(variant, channel_multiplier=1.0, pretrained=False, **kwar
         block_args=decode_arch_def(arch_def),
         stem_size=8,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -705,7 +700,7 @@ def _gen_mobilenet_v2(
         stem_size=32,
         fix_stem=fix_stem_head,
         round_chs_fn=round_chs_fn,
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'relu6'),
         **kwargs
     )
@@ -736,7 +731,7 @@ def _gen_fbnetc(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         stem_size=16,
         num_features=1984,  # paper suggests this, but is not 100% clear
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -771,7 +766,7 @@ def _gen_spnasnet(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         block_args=decode_arch_def(arch_def),
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -818,7 +813,7 @@ def _gen_efficientnet(variant, channel_multiplier=1.0, depth_multiplier=1.0, pre
         stem_size=32,
         round_chs_fn=round_chs_fn,
         act_layer=resolve_act_layer(kwargs, 'swish'),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs,
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -847,7 +842,7 @@ def _gen_efficientnet_edge(variant, channel_multiplier=1.0, depth_multiplier=1.0
         num_features=round_chs_fn(1280),
         stem_size=32,
         round_chs_fn=round_chs_fn,
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'relu'),
         **kwargs,
     )
@@ -878,7 +873,7 @@ def _gen_efficientnet_condconv(
         num_features=round_chs_fn(1280),
         stem_size=32,
         round_chs_fn=round_chs_fn,
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'swish'),
         **kwargs,
     )
@@ -920,7 +915,7 @@ def _gen_efficientnet_lite(variant, channel_multiplier=1.0, depth_multiplier=1.0
         fix_stem=True,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
         act_layer=resolve_act_layer(kwargs, 'relu6'),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs,
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -948,7 +943,7 @@ def _gen_efficientnetv2_base(
         num_features=round_chs_fn(1280),
         stem_size=32,
         round_chs_fn=round_chs_fn,
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
@@ -987,7 +982,7 @@ def _gen_efficientnetv2_s(
         num_features=round_chs_fn(num_features),
         stem_size=24,
         round_chs_fn=round_chs_fn,
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
@@ -1017,7 +1012,7 @@ def _gen_efficientnetv2_m(variant, channel_multiplier=1.0, depth_multiplier=1.0,
         num_features=1280,
         stem_size=24,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
@@ -1047,7 +1042,7 @@ def _gen_efficientnetv2_l(variant, channel_multiplier=1.0, depth_multiplier=1.0,
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
@@ -1077,7 +1072,7 @@ def _gen_efficientnetv2_xl(variant, channel_multiplier=1.0, depth_multiplier=1.0
         num_features=1280,
         stem_size=32,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         act_layer=resolve_act_layer(kwargs, 'silu'),
         **kwargs,
     )
@@ -1111,7 +1106,7 @@ def _gen_mixnet_s(variant, channel_multiplier=1.0, pretrained=False, **kwargs):
         num_features=1536,
         stem_size=16,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -1144,7 +1139,7 @@ def _gen_mixnet_m(variant, channel_multiplier=1.0, depth_multiplier=1.0, pretrai
         num_features=1536,
         stem_size=24,
         round_chs_fn=partial(round_channels, multiplier=channel_multiplier),
-        norm_layer=partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
+        norm_layer=kwargs.pop('norm_layer', None) or partial(nn.BatchNorm2d, **resolve_bn_args(kwargs)),
         **kwargs
     )
     model = _create_effnet(variant, pretrained, **model_kwargs)
@@ -1279,26 +1274,6 @@ def efficientnet_b0(pretrained=False, **kwargs):
     # NOTE for train, drop_rate should be 0.2, drop_path_rate should be 0.2
     model = _gen_efficientnet(
         'efficientnet_b0', channel_multiplier=1.0, depth_multiplier=1.0, pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def eca_efficientnet_b0(pretrained=False, **kwargs):
-    """ EfficientNet-B0 w/ ECA attn """
-    # NOTE experimental config
-    model = _gen_efficientnet(
-        'eca_efficientnet_b0', se_layer='ecam', channel_multiplier=1.0, depth_multiplier=1.0,
-        pretrained=pretrained, **kwargs)
-    return model
-
-
-@register_model
-def gc_efficientnet_b0(pretrained=False, **kwargs):
-    """ EfficientNet-B0 w/ GlobalContext """
-    # NOTE experminetal config
-    model = _gen_efficientnet(
-        'gc_efficientnet_b0', se_layer='gc', channel_multiplier=1.0, depth_multiplier=1.0,
-        pretrained=pretrained, **kwargs)
     return model
 
 

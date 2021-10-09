@@ -17,7 +17,7 @@ if hasattr(torch._C, '_jit_set_profiling_executor'):
 # transformer models don't support many of the spatial / feature based model functionalities
 NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'swin_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
-    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*']
+    'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit_*']
 NUM_NON_STD = len(NON_STD_FILTERS)
 
 # exclude models that cause specific test failures
@@ -25,7 +25,7 @@ if 'GITHUB_ACTIONS' in os.environ:  # and 'Linux' in platform.system():
     # GitHub Linux runner is slower and hits memory limits sooner than MacOS, exclude bigger models
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
-        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', 
+        '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
         '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*']
 else:
     EXCLUDE_FILTERS = []
@@ -188,23 +188,22 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
     input_tensor = torch.randn((batch_size, *input_size))
 
-    # test forward_features (always unpooled)
     outputs = model.forward_features(input_tensor)
-    if isinstance(outputs, tuple):
+    if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
     assert outputs.shape[1] == model.num_features
 
     # test forward after deleting the classifier, output should be poooled, size(-1) == model.num_features
     model.reset_classifier(0)
     outputs = model.forward(input_tensor)
-    if isinstance(outputs, tuple):
+    if isinstance(outputs,  (tuple, list)):
         outputs = outputs[0]
     assert len(outputs.shape) == 2
     assert outputs.shape[1] == model.num_features
 
     model = create_model(model_name, pretrained=False, num_classes=0).eval()
     outputs = model.forward(input_tensor)
-    if isinstance(outputs, tuple):
+    if isinstance(outputs, (tuple, list)):
         outputs = outputs[0]
     assert len(outputs.shape) == 2
     assert outputs.shape[1] == model.num_features

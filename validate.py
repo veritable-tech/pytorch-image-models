@@ -80,8 +80,8 @@ parser.add_argument('--pretrained', dest='pretrained', action='store_true',
                     help='use pre-trained model')
 parser.add_argument('--num-gpu', type=int, default=1,
                     help='Number of GPUS to use')
-parser.add_argument('--no-test-pool', dest='no_test_pool', action='store_true',
-                    help='disable test time pool')
+parser.add_argument('--test-pool', dest='test_pool', action='store_true',
+                    help='enable test time pool')
 parser.add_argument('--no-prefetcher', action='store_true', default=False,
                     help='disable fast prefetcher')
 parser.add_argument('--pin-mem', action='store_true', default=False,
@@ -154,7 +154,7 @@ def validate(args):
 
     data_config = resolve_data_config(vars(args), model=model, use_test_size=True, verbose=True)
     test_time_pool = False
-    if not args.no_test_pool:
+    if args.test_pool:
         model, test_time_pool = apply_test_time_pool(model, data_config, use_test_size=True)
 
     if args.torchscript:
@@ -295,6 +295,11 @@ def main():
             # model name doesn't exist, try as wildcard filter
             model_names = list_models(args.model)
             model_cfgs = [(n, '') for n in model_names]
+
+        if not model_cfgs and os.path.isfile(args.model):
+            with open(args.model) as f:
+                model_names = [line.rstrip() for line in f]
+            model_cfgs = [(n, None) for n in model_names if n]
 
     if len(model_cfgs):
         results_file = args.results_file or './results-all.csv'
