@@ -45,6 +45,7 @@ from typing import Callable, Optional, Union, Tuple, List
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 from torch.utils.checkpoint import checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
@@ -58,6 +59,36 @@ from .vision_transformer_relpos import RelPosMlp, RelPosBias  # FIXME move these
 
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
 
+
+def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
+    import re
+    out_dict = {}
+
+    stage_sizes = [
+        None,
+        None,
+        model.stages[2].blocks[0].attn.rel_pos.relative_position_bias_table.shape[0],
+        model.stages[3].blocks[0].attn.rel_pos.relative_position_bias_table.shape[0]
+    ]
+    window_sizes = [
+        None,
+        None,
+        model.stages[2].blocks[0].attn.rel_pos.window_size,
+        model.stages[3].blocks[0].attn.rel_pos.window_size
+    ]
+
+    for k, v in state_dict.items():
+        if 'attn.rel_pos' in  k:
+            stage = int(re.search(r"stages\.(\d+)", k).group(1))
+            if v.shape[0] == stage_sizes:
+                continue
+            window_size = math.ceil(224 / 2 ** (stage + 2))
+            assert (2 * window_size - 1) ** 2  == v.shape[0]
+            v = v.view(1, 2 * window_size - 1, 2 * window_size - 1, v.shape[1]).permute(0, 3, 1, 2)
+            v = F.interpolate(v, size=(2 * window_sizes[stage][0] - 1, 2 * window_sizes[stage][1] - 1), mode='bicubic', align_corners=False)
+            v = v.permute(0, 2, 3, 1).view(stage_sizes[stage], -1)
+        out_dict[k] = v
+    return out_dict
 
 def _cfg(url='', **kwargs):
     return {
@@ -1720,6 +1751,7 @@ def _create_maxxvit(variant, cfg_variant=None, pretrained=False, **kwargs):
         MaxxVit, variant, pretrained,
         model_cfg=model_cfgs[variant] if not cfg_variant else model_cfgs[cfg_variant],
         feature_cfg=dict(flatten_sequential=True),
+        pretrained_filter_fn=checkpoint_filter_fn,
         **kwargs)
 
 
