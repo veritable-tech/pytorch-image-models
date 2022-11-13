@@ -1669,7 +1669,7 @@ class MaxxVit(nn.Module):
         for i in range(num_stages):
             stage_stride = 2
             out_chs = cfg.embed_dim[i]
-            feat_size = tuple([(r - 1) // stage_stride + 1 for r in feat_size])
+            feat_size = tuple([r  // stage_stride  for r in feat_size])
             stages += [MaxxVitStage(
                 in_chs,
                 out_chs,
