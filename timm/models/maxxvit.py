@@ -97,6 +97,8 @@ def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
         if 'attn.rel_pos' in  k:
             if is_maxxvit:
                 # A hack with hard-coded dimension sizes
+                if v.shape[0] == 15 * 29:
+                    continue
                 assert v.shape[0] == 169
                 window_size = 7
                 v = v.view(1, 2 * window_size - 1, 2 * window_size - 1, v.shape[1]).permute(0, 3, 1, 2)
