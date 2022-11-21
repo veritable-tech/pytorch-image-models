@@ -67,18 +67,13 @@ def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
     is_maxxvit = False
     if isinstance(model.stages[2].blocks[0], MaxxVitBlock):
         is_maxxvit = True
-        # stage_sizes = [
-        #     None,
-        #     None,
-        #     model.stages[2].blocks[0].attn_block.attn.rel_pos.relative_position_bias_table.shape[0],
-        #     model.stages[3].blocks[0].attn_block.attn.rel_pos.relative_position_bias_table.shape[0]
-        # ]
-        # window_sizes = [
-        #     None,
-        #     None,
-        #     model.stages[2].blocks[0].attn_block.attn.rel_pos.window_size,
-        #     model.stages[3].blocks[0].attn_block.attn.rel_pos.window_size
-        # ]
+        window_sizes = [
+            model.stages[0].blocks[0].attn_block.attn.rel_pos.window_size,
+            model.stages[1].blocks[0].attn_block.attn.rel_pos.window_size,
+            model.stages[2].blocks[0].attn_block.attn.rel_pos.window_size,
+            model.stages[3].blocks[0].attn_block.attn.rel_pos.window_size
+        ]
+        assert all((x == window_sizes[0] for x in window_sizes[1:]))
     else:
         stage_sizes = [
             None,
@@ -94,25 +89,34 @@ def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
         ]
 
     for k, v in state_dict.items():
-        if 'attn.rel_pos' in  k:
+        if 'attn.rel_pos' in k:
             if is_maxxvit:
                 # A hack with hard-coded dimension sizes
-                if v.shape[0] == 15 * 29:
+                new_size = (2 * window_sizes[0][0] - 1, 2 * window_sizes[0][1] - 1)
+                if v.shape[0] == new_size[0] * new_size[1]:
                     continue
-                assert v.shape[0] == 169
-                window_size = 7
-                v = v.view(1, 2 * window_size - 1, 2 * window_size - 1, v.shape[1]).permute(0, 3, 1, 2)
-                v = F.interpolate(v, size=(15, 29), mode='bicubic', align_corners=False)
-                v = v.permute(0, 2, 3, 1).view(15 * 29, -1)
+                if v.shape[0] == 169:
+                    # 224 x 224
+                    original_window_size = 7
+                else:
+                    # 256 x 256
+                    original_window_size = 8
+                v = v.view(
+                    1, 2 * original_window_size - 1, 2 * original_window_size - 1, v.shape[1]
+                ).permute(0, 3, 1, 2)
+                v = F.interpolate(v, size=new_size, mode='bicubic', align_corners=False)
+                v = v.permute(0, 2, 3, 1).view(
+                    new_size[0] * new_size[1], -1
+                )
                 out_dict[k] = v
             else:
                 stage = int(re.search(r"stages\.(\d+)", k).group(1))
                 if v.shape[0] == stage_sizes:
                     continue
-                window_size = math.ceil(224 / 2 ** (stage + 2))
+                original_window_size = math.ceil(224 / 2 ** (stage + 2))
                 out_dict[k] = v
                 # assert (2 * window_size - 1) ** 2  == v.shape[0]
-                v = v.view(1, 2 * window_size - 1, 2 * window_size - 1, v.shape[1]).permute(0, 3, 1, 2)
+                v = v.view(1, 2 * original_window_size - 1, 2 * original_window_size - 1, v.shape[1]).permute(0, 3, 1, 2)
                 v = F.interpolate(v, size=(2 * window_sizes[stage][0] - 1, 2 * window_sizes[stage][1] - 1), mode='bicubic', align_corners=False)
                 v = v.permute(0, 2, 3, 1).view(stage_sizes[stage], -1)
         out_dict[k] = v
