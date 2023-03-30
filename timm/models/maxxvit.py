@@ -58,7 +58,19 @@ from ._registry import generate_default_cfgs, register_model
 __all__ = ['MaxxVitCfg', 'MaxxVitConvCfg', 'MaxxVitTransformerCfg', 'MaxxVit']
 
 
-def checkpoint_filter_fn(state_dict, model, adapt_layer_scale=False):
+# def checkpoint_filter_fn(state_dict, model: nn.Module):
+#     model_state_dict = model.state_dict()
+#     out_dict = {}
+#     for k, v in state_dict.items():
+#         if k in model_state_dict and v.ndim != model_state_dict[k].ndim and v.numel() == model_state_dict[k].numel():
+#             # adapt between conv2d / linear layers
+#             assert v.ndim in (2, 4)
+#             v = v.reshape(model_state_dict[k].shape)
+#         out_dict[k] = v
+#     return out_dict
+
+
+def checkpoint_filter_fn(state_dict, model):
     import re
     out_dict = {}
 
@@ -1847,19 +1859,6 @@ model_cfgs = dict(
         **_tf_cfg(),
     ),
 )
-
-
-def checkpoint_filter_fn(state_dict, model: nn.Module):
-    model_state_dict = model.state_dict()
-    out_dict = {}
-    for k, v in state_dict.items():
-        if k in model_state_dict and v.ndim != model_state_dict[k].ndim and v.numel() == model_state_dict[k].numel():
-            # adapt between conv2d / linear layers
-            assert v.ndim in (2, 4)
-            v = v.reshape(model_state_dict[k].shape)
-        out_dict[k] = v
-    return out_dict
-
 
 def _create_maxxvit(variant, cfg_variant=None, pretrained=False, **kwargs):
     if cfg_variant is None:
