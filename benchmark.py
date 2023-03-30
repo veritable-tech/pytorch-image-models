@@ -19,9 +19,10 @@ import torch.nn as nn
 import torch.nn.parallel
 
 from timm.data import resolve_data_config
-from timm.models import create_model, is_model, list_models, set_fast_norm
+from timm.layers import set_fast_norm
+from timm.models import create_model, is_model, list_models
 from timm.optim import create_optimizer_v2
-from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry
+from timm.utils import setup_default_logging, set_jit_fuser, decay_batch_step, check_batch_size_retry, ParseKwargs
 
 has_apex = False
 try:
@@ -56,6 +57,7 @@ try:
 except ImportError as e:
     has_functorch = False
 
+has_compile = hasattr(torch, 'compile')
 
 if torch.cuda.is_available():
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -74,12 +76,16 @@ parser.add_argument('--detail', action='store_true', default=False,
                     help='Provide train fwd/bwd/opt breakdown detail if True. Defaults to False')
 parser.add_argument('--no-retry', action='store_true', default=False,
                     help='Do not decay batch size and retry on error.')
-parser.add_argument('--results-file', default='', type=str, metavar='FILENAME',
+parser.add_argument('--results-file', default='', type=str,
                     help='Output csv file for validation results (summary)')
+parser.add_argument('--results-format', default='csv', type=str,
+                    help='Format for results file one of (csv, json) (default: csv).')
 parser.add_argument('--num-warm-iter', default=10, type=int,
-                    metavar='N', help='Number of warmup iterations (default: 10)')
+                    help='Number of warmup iterations (default: 10)')
 parser.add_argument('--num-bench-iter', default=40, type=int,
-                    metavar='N', help='Number of benchmark iterations (default: 40)')
+                    help='Number of benchmark iterations (default: 40)')
+parser.add_argument('--device', default='cuda', type=str,
+                    help="device to run benchmark on")
 
 # common inference / train args
 parser.add_argument('--model', '-m', metavar='NAME', default='resnet50',
@@ -102,17 +108,24 @@ parser.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
 parser.add_argument('--amp', action='store_true', default=False,
                     help='use PyTorch Native AMP for mixed precision training. Overrides --precision arg.')
+parser.add_argument('--amp-dtype', default='float16', type=str,
+                    help='lower precision AMP dtype (default: float16). Overrides --precision arg if args.amp True.')
 parser.add_argument('--precision', default='float32', type=str,
                     help='Numeric precision. One of (amp, float32, float16, bfloat16, tf32)')
 parser.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
+parser.add_argument('--fast-norm', default=False, action='store_true',
+                    help='enable experimental fast-norm')
+parser.add_argument('--model-kwargs', nargs='*', default={}, action=ParseKwargs)
+
+# codegen (model compilation) options
 scripting_group = parser.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
-                    help='convert model torchscript for inference')
+                             help='convert model torchscript for inference')
+scripting_group.add_argument('--torchcompile', nargs='?', type=str, default=None, const='inductor',
+                             help="Enable compilation w/ specified backend (default: inductor).")
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
-                    help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
-scripting_group.add_argument('--fast-norm', default=False, action='store_true',
-                    help='enable experimental fast-norm')
+                             help="Enable AOT Autograd optimization.")
 
 # train optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
@@ -157,19 +170,21 @@ def count_params(model: nn.Module):
 
 
 def resolve_precision(precision: str):
-    assert precision in ('amp', 'float16', 'bfloat16', 'float32')
-    use_amp = False
+    assert precision in ('amp', 'amp_bfloat16', 'float16', 'bfloat16', 'float32')
+    amp_dtype = None  # amp disabled
     model_dtype = torch.float32
     data_dtype = torch.float32
     if precision == 'amp':
-        use_amp = True
+        amp_dtype = torch.float16
+    elif precision == 'amp_bfloat16':
+        amp_dtype = torch.bfloat16
     elif precision == 'float16':
         model_dtype = torch.float16
         data_dtype = torch.float16
     elif precision == 'bfloat16':
         model_dtype = torch.bfloat16
         data_dtype = torch.bfloat16
-    return use_amp, model_dtype, data_dtype
+    return amp_dtype, model_dtype, data_dtype
 
 
 def profile_deepspeed(model, input_size=(3, 224, 224), batch_size=1, detailed=False):
@@ -205,6 +220,7 @@ class BenchmarkRunner:
             detail=False,
             device='cuda',
             torchscript=False,
+            torchcompile=None,
             aot_autograd=False,
             precision='float32',
             fuser='',
@@ -216,9 +232,12 @@ class BenchmarkRunner:
         self.model_name = model_name
         self.detail = detail
         self.device = device
-        self.use_amp, self.model_dtype, self.data_dtype = resolve_precision(precision)
+        self.amp_dtype, self.model_dtype, self.data_dtype = resolve_precision(precision)
         self.channels_last = kwargs.pop('channels_last', False)
-        self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=torch.float16) if self.use_amp else suppress
+        if self.amp_dtype is not None:
+            self.amp_autocast = partial(torch.cuda.amp.autocast, dtype=self.amp_dtype)
+        else:
+            self.amp_autocast = suppress
 
         if fuser:
             set_jit_fuser(fuser)
@@ -231,6 +250,7 @@ class BenchmarkRunner:
             drop_rate=kwargs.pop('drop', 0.),
             drop_path_rate=kwargs.pop('drop_path', None),
             drop_block_rate=kwargs.pop('drop_block', None),
+            **kwargs.pop('model_kwargs', {}),
         )
         self.model.to(
             device=self.device,
@@ -241,16 +261,22 @@ class BenchmarkRunner:
         _logger.info('Model %s created, param count: %d' % (model_name, self.param_count))
 
         data_config = resolve_data_config(kwargs, model=self.model, use_test_size=not use_train_size)
-        self.scripted = False
-        if torchscript:
-            self.model = torch.jit.script(self.model)
-            self.scripted = True
         self.input_size = data_config['input_size']
         self.batch_size = kwargs.pop('batch_size', 256)
 
-        if aot_autograd:
+        self.compiled = False
+        if torchscript:
+            self.model = torch.jit.script(self.model)
+            self.compiled = True
+        elif torchcompile:
+            assert has_compile, 'A version of torch w/ torch.compile() is required, possibly a nightly.'
+            torch._dynamo.reset()
+            self.model = torch.compile(self.model, backend=torchcompile)
+            self.compiled = True
+        elif aot_autograd:
             assert has_functorch, "functorch is needed for --aot-autograd"
             self.model = memory_efficient_fusion(self.model)
+            self.compiled = True
 
         self.example_inputs = None
         self.num_warm_iter = num_warm_iter
@@ -322,7 +348,7 @@ class InferenceBenchmarkRunner(BenchmarkRunner):
             param_count=round(self.param_count / 1e6, 2),
         )
 
-        retries = 0 if self.scripted else 2  # skip profiling if model is scripted
+        retries = 0 if self.compiled else 2  # skip profiling if model is scripted
         while retries:
             retries -= 1
             try:
@@ -542,7 +568,7 @@ def _try_run(
 def benchmark(args):
     if args.amp:
         _logger.warning("Overriding precision to 'amp' since --amp flag set.")
-        args.precision = 'amp'
+        args.precision = 'amp' if args.amp_dtype == 'float16' else '_'.join(['amp', args.amp_dtype])
     _logger.info(f'Benchmarking in {args.precision} precision. '
                  f'{"NHWC" if args.channels_last else "NCHW"} layout. '
                  f'torchscript {"enabled" if args.torchscript else "disabled"}')
@@ -620,7 +646,6 @@ def main():
         model_cfgs = [(n, None) for n in model_names]
 
     if len(model_cfgs):
-        results_file = args.results_file or './benchmark.csv'
         _logger.info('Running bulk validation on these pretrained models: {}'.format(', '.join(model_names)))
         results = []
         try:
@@ -641,22 +666,30 @@ def main():
             sort_key = 'infer_gmacs'
         results = filter(lambda x: sort_key in x, results)
         results = sorted(results, key=lambda x: x[sort_key], reverse=True)
-        if len(results):
-            write_results(results_file, results)
     else:
         results = benchmark(args)
+
+    if args.results_file:
+        write_results(args.results_file, results, format=args.results_format)
 
     # output results in JSON to stdout w/ delimiter for runner script
     print(f'--result\n{json.dumps(results, indent=4)}')
 
 
-def write_results(results_file, results):
+def write_results(results_file, results, format='csv'):
     with open(results_file, mode='w') as cf:
-        dw = csv.DictWriter(cf, fieldnames=results[0].keys())
-        dw.writeheader()
-        for r in results:
-            dw.writerow(r)
-        cf.flush()
+        if format == 'json':
+            json.dump(results, cf, indent=4)
+        else:
+            if not isinstance(results, (list, tuple)):
+                results = [results]
+            if not results:
+                return
+            dw = csv.DictWriter(cf, fieldnames=results[0].keys())
+            dw.writeheader()
+            for r in results:
+                dw.writerow(r)
+            cf.flush()
 
 
 if __name__ == '__main__':

@@ -34,6 +34,7 @@ except ImportError as e:
     print("Please install tensorflow_datasets package `pip install tensorflow-datasets`.")
     exit(1)
 
+from .class_map import load_class_map
 from .reader import Reader
 from .shared_count import SharedCount
 
@@ -41,6 +42,15 @@ from .shared_count import SharedCount
 MAX_TP_SIZE = int(os.environ.get('TFDS_TP_SIZE', 8))  # maximum TF threadpool size, for jpeg decodes and queuing activities
 SHUFFLE_SIZE = int(os.environ.get('TFDS_SHUFFLE_SIZE', 8192))  # samples to shuffle in DS queue
 PREFETCH_SIZE = int(os.environ.get('TFDS_PREFETCH_SIZE', 2048))  # samples to prefetch
+
+
+@tfds.decode.make_decoder()
+def decode_example(serialized_image, feature, dct_method='INTEGER_ACCURATE'):
+    return tf.image.decode_jpeg(
+        serialized_image,
+        channels=3,
+        dct_method=dct_method,
+    )
 
 
 def even_split_indices(split, n, num_samples):
@@ -85,6 +95,7 @@ class ReaderTfds(Reader):
             root,
             name,
             split='train',
+            class_map=None,
             is_training=False,
             batch_size=None,
             download=False,
@@ -142,7 +153,12 @@ class ReaderTfds(Reader):
         # NOTE: the tfds command line app can be used download & prepare datasets if you don't enable download flag
         if download:
             self.builder.download_and_prepare()
-        self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
+        self.remap_class = False
+        if class_map:
+            self.class_to_idx = load_class_map(class_map)
+            self.remap_class = True
+        else:
+            self.class_to_idx = get_class_labels(self.builder.info) if self.target_name == 'label' else {}
         self.split_info = self.builder.info.splits[split]
         self.num_samples = self.split_info.num_examples
 
@@ -242,6 +258,7 @@ class ReaderTfds(Reader):
         ds = self.builder.as_dataset(
             split=self.subsplit or self.split,
             shuffle_files=self.is_training,
+            decoders=dict(image=decode_example()),
             read_config=read_config,
         )
         # avoid overloading threading w/ combo of TF ds threads + PyTorch workers
@@ -289,6 +306,8 @@ class ReaderTfds(Reader):
             target_data = sample[self.target_name]
             if self.target_img_mode:
                 target_data = Image.fromarray(target_data, mode=self.target_img_mode)
+            elif self.remap_class:
+                target_data = self.class_to_idx[target_data]
             yield input_data, target_data
             sample_count += 1
             if self.is_training and sample_count >= target_sample_count:

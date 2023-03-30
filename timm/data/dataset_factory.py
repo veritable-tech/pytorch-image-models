@@ -4,7 +4,7 @@ Hacked together by / Copyright 2021, Ross Wightman
 """
 import os
 
-from torchvision.datasets import CIFAR100, CIFAR10, MNIST, QMNIST, KMNIST, FashionMNIST, ImageNet, ImageFolder
+from torchvision.datasets import CIFAR100, CIFAR10, MNIST, KMNIST, FashionMNIST, ImageFolder
 try:
     from torchvision.datasets import Places365
     has_places365 = True
@@ -15,6 +15,16 @@ try:
     has_inaturalist = True
 except ImportError:
     has_inaturalist = False
+try:
+    from torchvision.datasets import QMNIST
+    has_qmnist = True
+except ImportError:
+    has_qmnist = False
+try:
+    from torchvision.datasets import ImageNet
+    has_imagenet = True
+except ImportError:
+    has_imagenet = False
 
 from .dataset import IterableImageDataset, ImageDataset
 
@@ -22,7 +32,6 @@ _TORCH_BASIC_DS = dict(
     cifar10=CIFAR10,
     cifar100=CIFAR100,
     mnist=MNIST,
-    qmist=QMNIST,
     kmnist=KMNIST,
     fashion_mnist=FashionMNIST,
 )
@@ -122,7 +131,12 @@ def create_dataset(
             elif split in _EVAL_SYNONYM:
                 split = 'val'
             ds = Places365(split=split, **torch_kwargs)
+        elif name == 'qmnist':
+            assert has_qmnist, 'Please update to a newer PyTorch and torchvision for QMNIST dataset.'
+            use_train = split in _TRAIN_SYNONYM
+            ds = QMNIST(train=use_train, **torch_kwargs)
         elif name == 'imagenet':
+            assert has_imagenet, 'Please update to a newer PyTorch and torchvision for ImageNet dataset.'
             if split in _EVAL_SYNONYM:
                 split = 'val'
             ds = ImageNet(split=split, **torch_kwargs)
@@ -137,12 +151,13 @@ def create_dataset(
     elif name.startswith('hfds/'):
         # NOTE right now, HF datasets default arrow format is a random-access Dataset,
         # There will be a IterableDataset variant too, TBD
-        ds = ImageDataset(root, reader=name, split=split, **kwargs)
+        ds = ImageDataset(root, reader=name, split=split, class_map=class_map, **kwargs)
     elif name.startswith('tfds/'):
         ds = IterableImageDataset(
             root,
             reader=name,
             split=split,
+            class_map=class_map,
             is_training=is_training,
             download=download,
             batch_size=batch_size,
@@ -155,6 +170,7 @@ def create_dataset(
             root,
             reader=name,
             split=split,
+            class_map=class_map,
             is_training=is_training,
             batch_size=batch_size,
             repeats=repeats,
