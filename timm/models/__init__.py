@@ -17,11 +17,10 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .eva import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
-from .gluon_resnet import *
-from .gluon_xception import *
 from .hardcorenas import *
 from .hrnet import *
 from .inception_resnet_v2 import *
@@ -29,6 +28,7 @@ from .inception_v3 import *
 from .inception_v4 import *
 from .levit import *
 from .maxxvit import *
+from .metaformer import *
 from .mlp_mixer import *
 from .mobilenetv3 import *
 from .mobilevit import *
@@ -38,7 +38,6 @@ from .nest import *
 from .nfnet import *
 from .pit import *
 from .pnasnet import *
-from .poolformer import *
 from .pvt_v2 import *
 from .regnet import *
 from .res2net import *
@@ -61,6 +60,7 @@ from .visformer import *
 from .vision_transformer import *
 from .vision_transformer_hybrid import *
 from .vision_transformer_relpos import *
+from .vision_transformer_sam import *
 from .volo import *
 from .vovnet import *
 from .xception import *

@@ -41,7 +41,7 @@ NON_STD_FILTERS = [
     'vit_*', 'tnt_*', 'pit_*', 'coat_*', 'cait_*', '*mixer_*', 'gmlp_*', 'resmlp_*', 'twins_*',
     'convit_*', 'levit*', 'visformer*', 'deit*', 'jx_nest_*', 'nest_*', 'xcit_*', 'crossvit_*', 'beit*',
     'poolformer_*', 'volo_*', 'sequencer2d_*', 'pvt_v2*', 'mvitv2*', 'gcvit*', 'efficientformer*',
-    'eva_*', 'flexivit*',
+    'eva_*', 'flexivit*', 'eva02*', 'samvit_*'
 ]
 NUM_NON_STD = len(NON_STD_FILTERS)
 
@@ -51,12 +51,14 @@ if 'GITHUB_ACTIONS' in os.environ:
     EXCLUDE_FILTERS = [
         '*efficientnet_l2*', '*resnext101_32x48d', '*in21k', '*152x4_bitm', '*101x3_bitm', '*50x3_bitm',
         '*nfnet_f3*', '*nfnet_f4*', '*nfnet_f5*', '*nfnet_f6*', '*nfnet_f7*', '*efficientnetv2_xl*',
-        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', 'vit_huge*', 'vit_gi*', 'swin*huge*',
-        'swin*giant*', 'convnextv2_huge*', 'maxvit_xlarge*', 'davit_giant', 'davit_huge', 'regnet*1280', 'regnet*2560']
-    NON_STD_EXCLUDE_FILTERS = ['vit_huge*', 'vit_gi*',  'eva_giant*']
+        '*resnetrs350*', '*resnetrs420*', 'xcit_large_24_p8*', '*huge*', '*giant*', '*gigantic*',
+        '*enormous*', 'maxvit_xlarge*', 'regnet*1280', 'regnet*2560']
+    NON_STD_EXCLUDE_FILTERS = ['*huge*', '*giant*',  '*gigantic*', '*enormous*']
 else:
-    EXCLUDE_FILTERS = []
-    NON_STD_EXCLUDE_FILTERS = ['vit_gi*']
+    EXCLUDE_FILTERS = ['*enormous*']
+    NON_STD_EXCLUDE_FILTERS = ['*gigantic*', '*enormous*']
+
+EXCLUDE_JIT_FILTERS = []
 
 TARGET_FWD_SIZE = MAX_FWD_SIZE = 384
 TARGET_BWD_SIZE = 128
@@ -277,7 +279,7 @@ def test_model_default_cfgs_non_std(model_name, batch_size):
 
 
 if 'GITHUB_ACTIONS' not in os.environ:
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(240)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_load_pretrained(model_name, batch_size):
@@ -286,18 +288,12 @@ if 'GITHUB_ACTIONS' not in os.environ:
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=5)
         create_model(model_name, pretrained=True, in_chans=in_chans, num_classes=0)
 
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(240)
     @pytest.mark.parametrize('model_name', list_models(pretrained=True, exclude_filters=NON_STD_FILTERS))
     @pytest.mark.parametrize('batch_size', [1])
     def test_model_features_pretrained(model_name, batch_size):
         """Create that pretrained weights load when features_only==True."""
         create_model(model_name, pretrained=True, features_only=True)
-
-EXCLUDE_JIT_FILTERS = [
-    '*iabn*', 'tresnet*',  # models using inplace abn unlikely to ever be scriptable
-    'dla*', 'hrnet*', 'ghostnet*'  # hopefully fix at some point
-    'vit_large_*', 'vit_huge_*', 'vit_gi*',
-]
 
 
 @pytest.mark.torchscript
