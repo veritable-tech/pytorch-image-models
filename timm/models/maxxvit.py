@@ -77,11 +77,14 @@ def checkpoint_filter_fn(state_dict, model):
     is_maxxvit = False
     if isinstance(model.stages[2].blocks[0], MaxxVitBlock):
         is_maxxvit = True
+        if isinstance(model.stages[0].blocks[0].attn_grid.attn.rel_pos, RelPosMlp):
+            # Don't need to do anything. RelPosMlp can handle different window sizes
+            return state_dict
         window_sizes = [
-            model.stages[0].blocks[0].attn_block.attn.rel_pos.window_size,
-            model.stages[1].blocks[0].attn_block.attn.rel_pos.window_size,
-            model.stages[2].blocks[0].attn_block.attn.rel_pos.window_size,
-            model.stages[3].blocks[0].attn_block.attn.rel_pos.window_size
+            model.stages[0].blocks[0].attn_grid.attn.rel_pos.window_size,
+            model.stages[1].blocks[0].attn_grid.attn.rel_pos.window_size,
+            model.stages[2].blocks[0].attn_grid.attn.rel_pos.window_size,
+            model.stages[3].blocks[0].attn_grid.attn.rel_pos.window_size
         ]
         assert all((x == window_sizes[0] for x in window_sizes[1:]))
     else:
@@ -706,6 +709,7 @@ class ConvNeXtBlock(nn.Module):
 
 def window_partition(x, window_size: List[int]):
     B, H, W, C = x.shape
+    # print(window_size, H, W)
     _assert(H % window_size[0] == 0, f'height ({H}) must be divisible by window ({window_size[0]})')
     _assert(W % window_size[1] == 0, '')
     x = x.view(B, H // window_size[0], window_size[0], W // window_size[1], window_size[1], C)
