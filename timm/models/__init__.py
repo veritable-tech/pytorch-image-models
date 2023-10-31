@@ -17,12 +17,16 @@ from .edgenext import *
 from .efficientformer import *
 from .efficientformer_v2 import *
 from .efficientnet import *
+from .efficientvit_mit import *
+from .efficientvit_msra import *
 from .eva import *
+from .fastvit import *
 from .focalnet import *
 from .gcvit import *
 from .ghostnet import *
 from .hardcorenas import *
 from .hrnet import *
+from .inception_next import *
 from .inception_resnet_v2 import *
 from .inception_v3 import *
 from .inception_v4 import *
@@ -40,6 +44,7 @@ from .pit import *
 from .pnasnet import *
 from .pvt_v2 import *
 from .regnet import *
+from .repghost import *
 from .repvit import *
 from .res2net import *
 from .resnest import *
@@ -53,6 +58,7 @@ from .sknet import *
 from .swin_transformer import *
 from .swin_transformer_v2 import *
 from .swin_transformer_v2_cr import *
+from .tiny_vit import *
 from .tnt import *
 from .tresnet import *
 from .twins import *

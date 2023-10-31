@@ -21,7 +21,8 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from timm.data import IMAGENET_DEFAULT_MEAN, IMAGENET_DEFAULT_STD
-from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, ClassifierHead
+from timm.layers import PatchEmbed, Mlp, DropPath, to_2tuple, trunc_normal_, _assert, ClassifierHead,\
+    resample_patch_embed
 from ._builder import build_model_with_cfg
 from ._features_fx import register_notrace_function
 from ._registry import generate_default_cfgs, register_model, register_model_deprecations
@@ -398,6 +399,8 @@ class SwinTransformerV2Stage(nn.Module):
         self.depth = depth
         self.output_nchw = output_nchw
         self.grad_checkpointing = False
+        window_size = to_2tuple(window_size)
+        shift_size = tuple([w // 2 for w in window_size])
 
         # patch merging / downsample layer
         if downsample:
@@ -413,7 +416,7 @@ class SwinTransformerV2Stage(nn.Module):
                 input_resolution=self.output_resolution,
                 num_heads=num_heads,
                 window_size=window_size,
-                shift_size=0 if (i % 2 == 0) else window_size // 2,
+                shift_size=0 if (i % 2 == 0) else shift_size,
                 mlp_ratio=mlp_ratio,
                 qkv_bias=qkv_bias,
                 proj_drop=proj_drop,
@@ -568,7 +571,7 @@ class SwinTransformerV2(nn.Module):
     def no_weight_decay(self):
         nod = set()
         for n, m in self.named_modules():
-            if any([kw in n for kw in ("cpb_mlp", "logit_scale", 'relative_position_bias_table')]):
+            if any([kw in n for kw in ("cpb_mlp", "logit_scale")]):
                 nod.add(n)
         return nod
 
@@ -620,6 +623,18 @@ def checkpoint_filter_fn(state_dict, model):
     for k, v in state_dict.items():
         if any([n in k for n in ('relative_position_index', 'relative_coords_table', 'attn_mask')]):
             continue  # skip buffers that should not be persistent
+
+        if 'patch_embed.proj.weight' in k:
+            _, _, H, W = model.patch_embed.proj.weight.shape
+            if v.shape[-2] != H or v.shape[-1] != W:
+                v = resample_patch_embed(
+                    v,
+                    (H, W),
+                    interpolation='bicubic',
+                    antialias=True,
+                    verbose=True,
+                )
+
         if not native_checkpoint:
             # skip layer remapping for updated checkpoints
             k = re.sub(r'layers.(\d+).downsample', lambda x: f'layers.{int(x.group(1)) + 1}.downsample', k)

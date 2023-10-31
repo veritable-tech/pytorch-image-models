@@ -42,6 +42,7 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         x = self.act(x)
         x = self.drop1(x)
+        x = self.norm(x)
         x = self.fc2(x)
         x = self.drop2(x)
         return x
@@ -128,8 +129,6 @@ class SwiGLU(nn.Module):
         self.norm = norm_layer(hidden_features) if norm_layer is not None else nn.Identity()
         self.fc2 = nn.Linear(hidden_features, out_features, bias=bias[1])
         self.drop2 = nn.Dropout(drop_probs[1])
-
-        self.drop = nn.Dropout(drop)
 
     def init_weights(self):
         # override init of fc1 w/ gate portion set to weight near zero, bias=1

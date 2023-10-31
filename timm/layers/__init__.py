@@ -1,6 +1,7 @@
 from .activations import *
 from .adaptive_avgmax_pool import \
     adaptive_avgmax_pool2d, select_adaptive_pool2d, AdaptiveAvgMaxPool2d, SelectAdaptivePool2d
+from .attention_pool import AttentionPoolLatent
 from .attention_pool2d import AttentionPool2d, RotAttentionPool2d, RotaryEmbedding
 from .blur_pool import BlurPool2d
 from .classifier import ClassifierHead, create_classifier, NormMlpClassifierHead
@@ -37,7 +38,8 @@ from .patch_dropout import PatchDropout
 from .patch_embed import PatchEmbed, PatchEmbedWithSize, resample_patch_embed
 from .pool2d_same import AvgPool2dSame, create_pool2d
 from .pos_embed import resample_abs_pos_embed, resample_abs_pos_embed_nhwc
-from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords
+from .pos_embed_rel import RelPosMlp, RelPosBias, RelPosBiasTf, gen_relative_position_index, gen_relative_log_coords, \
+    resize_rel_pos_bias_table, resize_rel_pos_bias_table_simple, resize_rel_pos_bias_table_levit
 from .pos_embed_sincos import pixel_freq_bands, freq_bands, build_sincos2d_pos_embed, build_fourier_pos_embed, \
     build_rotary_pos_embed, apply_rot_embed, apply_rot_embed_cat, apply_rot_embed_list, apply_keep_indices_nlc, \
     FourierEmbed, RotaryEmbedding, RotaryEmbeddingCat
@@ -50,4 +52,5 @@ from .split_batchnorm import SplitBatchNorm2d, convert_splitbn_model
 from .std_conv import StdConv2d, StdConv2dSame, ScaledStdConv2d, ScaledStdConv2dSame
 from .test_time_pool import TestTimePoolHead, apply_test_time_pool
 from .trace_utils import _assert, _float_to_int
+from .typing import LayerType, PadType
 from .weight_init import trunc_normal_, trunc_normal_tf_, variance_scaling_, lecun_normal_
